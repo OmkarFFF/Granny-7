@@ -1,0 +1,6 @@
+{
+  "name": "Granny 7",
+  "description": "Native Android 3D Horror Escape Game - Granny 7: The Famhouse",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
