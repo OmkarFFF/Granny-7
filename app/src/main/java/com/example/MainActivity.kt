@@ -13,6 +13,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.audio.HorrorAudioEngine
 import com.example.engine.GrannyRenderer
 import com.example.game.FarmhouseWorld
+import com.example.game.GameSettings
 import com.example.game.GameState
 import com.example.ui.*
 import com.example.ui.theme.MyApplicationTheme
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 var gameState by remember { mutableStateOf(GameState.MAIN_MENU) }
+                var currentSettings by remember { mutableStateOf(GameSettings()) }
                 var isScareActive by remember { mutableStateOf(false) }
                 var notificationText by remember { mutableStateOf("") }
 
@@ -95,13 +97,48 @@ class MainActivity : ComponentActivity() {
                     when (gameState) {
                         GameState.MAIN_MENU -> {
                             MainMenuOverlay(
-                                onStartGame = {
-                                    gameState = GameState.GAMEPLAY
-                                    gameRenderer.currentGameState = GameState.GAMEPLAY
-                                    audioEngine.startAmbience()
+                                onPlay = {
+                                    gameState = GameState.OPTIONS
+                                    gameRenderer.currentGameState = GameState.OPTIONS
                                 },
                                 onQuitGame = {
                                     finish()
+                                },
+                                audioEngine = audioEngine
+                            )
+                        }
+
+                        GameState.OPTIONS -> {
+                            OptionsOverlay(
+                                initialSettings = currentSettings,
+                                onSaveAndContinue = { newSettings ->
+                                    currentSettings = newSettings
+                                    gameRenderer.applySettings(newSettings)
+                                    gameState = GameState.TIPS_STORY
+                                    gameRenderer.currentGameState = GameState.TIPS_STORY
+                                },
+                                onBack = {
+                                    gameState = GameState.MAIN_MENU
+                                    gameRenderer.currentGameState = GameState.MAIN_MENU
+                                },
+                                audioEngine = audioEngine
+                            )
+                        }
+
+                        GameState.TIPS_STORY -> {
+                            TipsStoryOverlay(
+                                onStartGame = {
+                                    gameRenderer.applySettings(currentSettings)
+                                    gameRenderer.startDay(1)
+                                    gameState = GameState.GAMEPLAY
+                                    gameRenderer.currentGameState = GameState.GAMEPLAY
+                                    if (currentSettings.music) {
+                                        audioEngine.startAmbience()
+                                    }
+                                },
+                                onBackToOptions = {
+                                    gameState = GameState.OPTIONS
+                                    gameRenderer.currentGameState = GameState.OPTIONS
                                 },
                                 audioEngine = audioEngine
                             )
@@ -131,7 +168,7 @@ class MainActivity : ComponentActivity() {
                                     gameRenderer.currentGameState = GameState.GAMEPLAY
                                 },
                                 onRestart = {
-                                    gameRenderer.playerPos.set(0f, 0f, 6.0f)
+                                    gameRenderer.startDay(gameRenderer.playerDays)
                                     gameState = GameState.GAMEPLAY
                                     gameRenderer.currentGameState = GameState.GAMEPLAY
                                 },
@@ -146,14 +183,12 @@ class MainActivity : ComponentActivity() {
                         GameState.GAME_OVER -> {
                             GameOverOverlay(
                                 onRetry = {
-                                    gameRenderer.playerDays = 1
-                                    gameRenderer.playerPos.set(0f, 0f, 6.0f)
+                                    gameRenderer.startDay(1)
                                     gameState = GameState.GAMEPLAY
                                     gameRenderer.currentGameState = GameState.GAMEPLAY
                                 },
                                 onMainMenu = {
-                                    gameRenderer.playerDays = 1
-                                    gameRenderer.playerPos.set(0f, 0f, 6.0f)
+                                    gameRenderer.startDay(1)
                                     gameState = GameState.MAIN_MENU
                                     gameRenderer.currentGameState = GameState.MAIN_MENU
                                     audioEngine.stopAmbience()
@@ -164,8 +199,7 @@ class MainActivity : ComponentActivity() {
                         GameState.WIN -> {
                             WinOverlay(
                                 onPlayAgain = {
-                                    gameRenderer.playerDays = 1
-                                    gameRenderer.playerPos.set(0f, 0f, 6.0f)
+                                    gameRenderer.startDay(1)
                                     gameState = GameState.MAIN_MENU
                                     gameRenderer.currentGameState = GameState.MAIN_MENU
                                     audioEngine.stopAmbience()

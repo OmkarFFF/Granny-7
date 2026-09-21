@@ -21,9 +21,10 @@ enum class EnemyState {
 abstract class BaseEnemy(
     val name: String,
     var position: Vector3,
-    val moveSpeed: Float = 2.4f,
-    val chaseSpeed: Float = 3.6f
+    var moveSpeed: Float = 2.2f,
+    var chaseSpeed: Float = 3.6f
 ) {
+    var isActive: Boolean = true
     var state = EnemyState.PATROL
     var rotationY = 0f
     var stateTimer = 0f
@@ -31,6 +32,7 @@ abstract class BaseEnemy(
     var currentWaypointIndex = 0
     var lastSeenPlayerPos = Vector3()
     var isPlayerInSight = false
+    var walkCycle: Float = 0f
 
     abstract fun update(
         dt: Float,
@@ -107,10 +109,14 @@ abstract class BaseEnemy(
  */
 class GrannyAI(startPos: Vector3) : BaseEnemy("Granny", startPos, moveSpeed = 2.2f, chaseSpeed = 3.8f) {
 
+    var isAttacking = false
+    var attackAnimTimer = 0f
     private var attackCooldown = 0f
+    private var hasDealtDamage = false
 
     fun onNoiseHeard(noisePos: Vector3, loudness: Float) {
-        if (state == EnemyState.CHASE) return // busy chasing
+        if (!isActive) return
+        if (state == EnemyState.CHASE || isAttacking) return // busy chasing
         val dist = position.distanceTo(noisePos)
         if (dist < loudness) {
             state = EnemyState.INVESTIGATE_NOISE
@@ -127,8 +133,40 @@ class GrannyAI(startPos: Vector3) : BaseEnemy("Granny", startPos, moveSpeed = 2.
         audio: HorrorAudioEngine,
         onPlayerAttacked: (damage: Int, message: String) -> Unit
     ) {
+        if (!isActive) return
+
         attackCooldown = max(0f, attackCooldown - dt)
         isPlayerInSight = canSeePlayer(playerPos, playerHiding, world, viewDistance = 14f)
+
+        // Handle Active Attack Animation Sequence
+        if (isAttacking) {
+            attackAnimTimer += dt
+            // Keep facing player during windup and strike
+            val dx = playerPos.x - position.x
+            val dz = playerPos.z - position.z
+            rotationY = (atan2(dx.toDouble(), dz.toDouble()) * 180.0 / Math.PI).toFloat()
+
+            // Strike impact point: 0.55 seconds into the attack
+            if (attackAnimTimer >= 0.55f && !hasDealtDamage) {
+                hasDealtDamage = true
+                val dist = position.distanceTo(playerPos)
+                if (dist < 2.0f && playerHiding == HidingType.NONE) {
+                    audio.playClubAttack()
+                    onPlayerAttacked(1, "Granny knocked you out with her club!")
+                }
+            }
+
+            // Total attack animation complete (recovery)
+            if (attackAnimTimer >= 1.25f) {
+                isAttacking = false
+                attackAnimTimer = 0f
+                attackCooldown = 2.4f
+                state = EnemyState.SEARCH
+                stateTimer = 3.5f
+                targetPosition.set(playerPos)
+            }
+            return
+        }
 
         when (state) {
             EnemyState.PATROL -> {
@@ -167,12 +205,12 @@ class GrannyAI(startPos: Vector3) : BaseEnemy("Granny", startPos, moveSpeed = 2.
                     lastSeenPlayerPos.set(playerPos)
                     moveTowards(playerPos, chaseSpeed, dt, world)
 
-                    // Club melee attack
+                    // Initiate smooth melee club attack when in range
                     val dist = position.distanceTo(playerPos)
-                    if (dist < 1.6f && attackCooldown <= 0f) {
-                        attackCooldown = 2.2f
-                        audio.playClubAttack()
-                        onPlayerAttacked(1, "Granny knocked you out with her club!")
+                    if (dist < 1.7f && attackCooldown <= 0f) {
+                        isAttacking = true
+                        attackAnimTimer = 0f
+                        hasDealtDamage = false
                     }
                 } else {
                     // Lost sight, navigate to last seen spot
@@ -201,10 +239,17 @@ class GrannyAI(startPos: Vector3) : BaseEnemy("Granny", startPos, moveSpeed = 2.
 
 /**
  * Grandpa AI:
- * Patrols -> Sees player -> Aims -> Shoots shotgun -> Searches -> Patrols.
+ * Patrols -> Sees player -> Smooth Aim -> Shoots shotgun with recoil & muzzle flash -> Searches -> Patrols.
  * Does NOT investigate dropped object noise!
  */
 class GrandpaAI(startPos: Vector3) : BaseEnemy("Grandpa", startPos, moveSpeed = 1.9f, chaseSpeed = 2.8f) {
+
+    var isAiming = false
+    var aimProgress = 0f
+    var isShooting = false
+    var shotTimer = 0f
+    var muzzleFlashActive = false
+    var recoilProgress = 0f
 
     private var aimTime = 0f
     private var shootCooldown = 0f
@@ -217,18 +262,46 @@ class GrandpaAI(startPos: Vector3) : BaseEnemy("Grandpa", startPos, moveSpeed = 
         audio: HorrorAudioEngine,
         onPlayerAttacked: (damage: Int, message: String) -> Unit
     ) {
+        if (!isActive) return
+
         shootCooldown = max(0f, shootCooldown - dt)
         isPlayerInSight = canSeePlayer(playerPos, playerHiding, world, viewDistance = 16f)
 
+        // Handle Active Shot Animation with smooth Recoil and Muzzle Flash
+        if (isShooting) {
+            shotTimer += dt
+            muzzleFlashActive = shotTimer < 0.12f
+
+            // Recoil kickback and return curve
+            recoilProgress = if (shotTimer < 0.15f) {
+                shotTimer / 0.15f // kickback
+            } else {
+                (1.0f - (shotTimer - 0.15f) / 0.50f).coerceIn(0f, 1f) // return
+            }
+
+            if (shotTimer >= 0.65f) {
+                isShooting = false
+                muzzleFlashActive = false
+                recoilProgress = 0f
+                state = EnemyState.SEARCH
+                stateTimer = 4.5f
+                targetPosition.set(lastSeenPlayerPos)
+            }
+            return
+        }
+
         when (state) {
             EnemyState.PATROL -> {
+                isAiming = false
+                aimProgress = max(0f, aimProgress - dt * 2.0f)
                 if (isPlayerInSight) {
                     state = EnemyState.AIM
-                    aimTime = 1.2f // aims for 1.2 seconds before firing
+                    aimTime = 1.25f // smooth aiming duration
+                    aimProgress = 0f
+                    isAiming = true
                     lastSeenPlayerPos.set(playerPos)
                 } else {
                     if (world.waypoints.isNotEmpty()) {
-                        // Patrol in reverse order for variance
                         val wpIndex = (world.waypoints.size - 1 - (currentWaypointIndex % world.waypoints.size))
                         val wp = world.waypoints[wpIndex]
                         if (moveTowards(wp, moveSpeed, dt, world)) {
@@ -239,6 +312,9 @@ class GrandpaAI(startPos: Vector3) : BaseEnemy("Grandpa", startPos, moveSpeed = 
             }
 
             EnemyState.AIM -> {
+                isAiming = true
+                aimProgress = min(1.0f, aimProgress + dt * 1.5f)
+
                 // Face player
                 val dx = playerPos.x - position.x
                 val dz = playerPos.z - position.z
@@ -246,22 +322,27 @@ class GrandpaAI(startPos: Vector3) : BaseEnemy("Grandpa", startPos, moveSpeed = 
 
                 aimTime -= dt
                 if (aimTime <= 0f) {
-                    // Shoot shotgun
+                    // Trigger Shotgun Blast
+                    isShooting = true
+                    shotTimer = 0f
+                    muzzleFlashActive = true
+                    recoilProgress = 1.0f
                     audio.playShotgunBlast()
-                    if (isPlayerInSight && shootCooldown <= 0f) {
+
+                    if (isPlayerInSight && shootCooldown <= 0f && playerHiding == HidingType.NONE) {
                         shootCooldown = 4.0f
                         onPlayerAttacked(1, "Grandpa shot you with his shotgun!")
                     }
-                    state = EnemyState.SEARCH
-                    stateTimer = 5f
-                    targetPosition.set(lastSeenPlayerPos)
                 }
             }
 
             EnemyState.SEARCH -> {
+                isAiming = false
+                aimProgress = max(0f, aimProgress - dt * 2.0f)
                 if (isPlayerInSight && shootCooldown <= 0f) {
                     state = EnemyState.AIM
-                    aimTime = 1.0f
+                    aimTime = 1.1f
+                    aimProgress = 0f
                 } else {
                     moveTowards(targetPosition, moveSpeed, dt, world)
                     stateTimer -= dt

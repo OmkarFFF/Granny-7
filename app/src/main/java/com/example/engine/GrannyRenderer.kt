@@ -24,20 +24,38 @@ class GrannyRenderer(
     var currentGameState = GameState.MAIN_MENU
 
     // Player Camera & Physics
-    var playerPos = Vector3(0f, 0f, 6.0f) // Start at main entrance
-    var playerYaw = 0f
+    var playerPos = Vector3(-7.5f, 3.5f, 4.0f) // Start in upstairs bedroom
+    var playerYaw = 85f
     var playerPitch = 0f
     var isCrouching = false
     var currentHidingSpot: HidingSpot? = null
     var playerHiding = HidingType.NONE
 
-    // Flashlight & Inventory
-    var isFlashlightOn = true
+    // Smooth Camera & Movement Dynamics
+    var targetLookYaw = 85f
+    var targetLookPitch = 0f
+    var lookSensitivity = 1.0f
+    var currentVelX = 0f
+    var currentVelZ = 0f
+    var walkCycleTimer = 0f
+
+    // Day Sequence & Wake-up Animation (Days 1 to 4)
+    var playerDays = 1
+    val maxDays = 4
+    var isWakingUp = true
+    var wakeUpTimer = 0f
+    var currentEyeHeight = 0.40f
+    var wakeUpRoll = -16f
+
+    // Flashlight & Inventory (Torch starts strictly OFF)
+    var isFlashlightOn = false
+    var flashlightIntensity = 0f
     val inventory = ArrayList<WorldItem>()
     var selectedItemIndex = 0
-    var playerDays = 1
-    val maxDays = 5
     var noiseLevel = 0f
+
+    // Game Settings
+    var gameSettings = GameSettings()
 
     // Input state from HUD
     var moveJoystickX = 0f
@@ -67,7 +85,12 @@ class GrannyRenderer(
     private val chainedChestMesh get() = MeshFactory.createChainedChestMesh()
 
     private val grannyMesh get() = MeshFactory.createGrannyMesh()
+    private val grannyBodyMesh get() = MeshFactory.createGrannyBodyMesh()
+    private val grannyClubArmMesh get() = MeshFactory.createGrannyClubArmMesh()
     private val grandpaMesh get() = MeshFactory.createGrandpaMesh()
+    private val grandpaBodyMesh get() = MeshFactory.createGrandpaBodyMesh()
+    private val grandpaShotgunMesh get() = MeshFactory.createGrandpaShotgunMesh()
+    private val muzzleFlashMesh get() = MeshFactory.createMuzzleFlashMesh()
     private val sledermanMesh get() = MeshFactory.createSledermanMesh()
     private val sledrinaMesh get() = MeshFactory.createSledrinaMesh()
     private val angeleneMesh get() = MeshFactory.createAngeleneMesh()
@@ -129,18 +152,131 @@ class GrannyRenderer(
         }
     }
 
+    fun applySettings(settings: GameSettings) {
+        gameSettings = settings
+        audio.isMusicEnabled = settings.music
+        audio.setSoundEnabled(settings.soundEffects)
+
+        if (settings.difficulty == DifficultyLevel.PRACTICE) {
+            grannyAI.isActive = false
+            grandpaAI.isActive = false
+            sledermanAI.isActive = false
+            angeleneAI.isActiveInWorld = false
+        } else {
+            grannyAI.isActive = settings.grannyEnabled
+            grandpaAI.isActive = settings.grandpaEnabled
+            sledermanAI.isActive = settings.slendrinaEnabled
+
+            when (settings.difficulty) {
+                DifficultyLevel.EASY -> {
+                    grannyAI.moveSpeed = 1.8f
+                    grannyAI.chaseSpeed = 2.8f
+                    grandpaAI.moveSpeed = 1.6f
+                    grandpaAI.chaseSpeed = 2.4f
+                }
+                DifficultyLevel.NORMAL -> {
+                    grannyAI.moveSpeed = 2.2f
+                    grannyAI.chaseSpeed = 3.6f
+                    grandpaAI.moveSpeed = 1.9f
+                    grandpaAI.chaseSpeed = 2.8f
+                }
+                DifficultyLevel.HARD -> {
+                    grannyAI.moveSpeed = 2.6f
+                    grannyAI.chaseSpeed = 4.2f
+                    grandpaAI.moveSpeed = 2.2f
+                    grandpaAI.chaseSpeed = 3.2f
+                }
+                DifficultyLevel.EXTREME -> {
+                    grannyAI.moveSpeed = 3.1f
+                    grannyAI.chaseSpeed = 4.6f
+                    grandpaAI.moveSpeed = 2.5f
+                    grandpaAI.chaseSpeed = 3.6f
+                }
+                else -> {}
+            }
+        }
+
+        if (!settings.slendrinaEnabled) {
+            world.sledrinaState.isScaring = false
+            world.sledrinaState.timerUntilNextAppearance = 99999f
+        }
+
+        if (settings.extraLocks) {
+            world.doors.find { it.id == "front_door" }?.isLocked = true
+            world.doors.find { it.id == "front_door" }?.isOpen = false
+        }
+    }
+
+    fun startDay(dayNumber: Int) {
+        playerDays = dayNumber.coerceIn(1, maxDays)
+        isWakingUp = true
+        wakeUpTimer = 0f
+        isFlashlightOn = false
+        flashlightIntensity = 0f
+        currentEyeHeight = 0.40f
+        wakeUpRoll = -16f
+
+        playerPos.set(-7.5f, 3.5f, 4.0f)
+        playerYaw = 85f
+        playerPitch = 32f
+        targetLookYaw = 85f
+        targetLookPitch = 32f
+        currentVelX = 0f
+        currentVelZ = 0f
+        playerHiding = HidingType.NONE
+        currentHidingSpot = null
+
+        grannyAI.position.set(-6.5f, 0f, -5.0f)
+        grannyAI.state = EnemyState.PATROL
+        grannyAI.isAttacking = false
+        grannyAI.attackAnimTimer = 0f
+
+        grandpaAI.position.set(6.5f, 0f, -2.0f)
+        grandpaAI.state = EnemyState.PATROL
+        grandpaAI.isShooting = false
+        grandpaAI.isAiming = false
+
+        onNotification("DAY $playerDays")
+    }
+
     private fun updateGame(dt: Float) {
-        // 1. Sledrina Appearance Event Countdown (~every 70s)
+        // 1. Smooth Wake-up Sequence (Days 1 to 4)
+        if (isWakingUp) {
+            wakeUpTimer += dt
+            if (wakeUpTimer < 1.8f) {
+                currentEyeHeight = 0.40f
+                playerPitch = 32f
+                wakeUpRoll = -16f * (1.0f - wakeUpTimer / 1.8f)
+            } else if (wakeUpTimer < 3.2f) {
+                val p = (wakeUpTimer - 1.8f) / 1.4f
+                currentEyeHeight = 0.40f + 0.55f * p
+                playerPitch = 32f * (1.0f - p)
+                wakeUpRoll = 0f
+            } else if (wakeUpTimer < 4.5f) {
+                val p = (wakeUpTimer - 3.2f) / 1.3f
+                currentEyeHeight = 0.95f + 0.75f * p
+                playerPitch = 0f
+                wakeUpRoll = 0f
+            } else {
+                isWakingUp = false
+                currentEyeHeight = 1.70f
+                wakeUpRoll = 0f
+            }
+        }
+
+        // 2. Smooth Flashlight Intensity Transition
+        val targetFlashlight = if (isFlashlightOn) 1.0f else 0.0f
+        flashlightIntensity += (targetFlashlight - flashlightIntensity) * (1.0f - exp(-16f * dt))
+
+        // 3. Sledrina Appearance Event Countdown (~every 70s)
         val sledrina = world.sledrinaState
         if (!sledrina.isScaring) {
             sledrina.timerUntilNextAppearance -= dt
-            if (sledrina.timerUntilNextAppearance <= 0f) {
-                // Trigger Sledrina jumpscare event!
+            if (sledrina.timerUntilNextAppearance <= 0f && gameSettings.difficulty != DifficultyLevel.PRACTICE) {
                 sledrina.isScaring = true
                 sledrina.scareDuration = 8.5f
                 sledrina.timerUntilNextAppearance = 75f
 
-                // Position Sledrina 1.3m directly in front of the player's face
                 val rad = Math.toRadians(playerYaw.toDouble())
                 val forwardX = -sin(rad).toFloat()
                 val forwardZ = cos(rad).toFloat()
@@ -157,11 +293,9 @@ class GrannyRenderer(
                 onStateChange(GameState.SLEDRINA_SCARE)
             }
         } else {
-            // Sledrina scare is active - player movement is locked!
             sledrina.scareDuration -= dt
-            // Camera shake during scare
-            playerYaw += (Random.nextFloat() - 0.5f) * 1.5f
-            playerPitch += (Random.nextFloat() - 0.5f) * 1.2f
+            targetLookYaw += (Random.nextFloat() - 0.5f) * 2.5f
+            targetLookPitch += (Random.nextFloat() - 0.5f) * 2.0f
 
             if (sledrina.scareDuration <= 0f) {
                 sledrina.isScaring = false
@@ -172,26 +306,42 @@ class GrannyRenderer(
             return
         }
 
-        // 2. Camera Look rotation from touch delta
-        playerYaw += lookDeltaX * 0.22f
-        playerPitch = (playerPitch + lookDeltaY * 0.22f).coerceIn(-75f, 75f)
+        // 4. Smooth Camera Look Rotation with Exponential Damping
+        val lookSens = 0.22f * lookSensitivity
+        targetLookYaw += lookDeltaX * lookSens
+        targetLookPitch = (targetLookPitch + lookDeltaY * lookSens).coerceIn(-75f, 75f)
         lookDeltaX = 0f
         lookDeltaY = 0f
 
-        // 3. Player Movement (if not hiding in wardrobe or scare-locked)
-        if (playerHiding == HidingType.NONE) {
-            val speed = if (isCrouching) 2.0f else 3.8f
+        val lookDamping = 1.0f - exp(-22f * dt)
+        playerYaw += (targetLookYaw - playerYaw) * lookDamping
+        playerPitch += (targetLookPitch - playerPitch) * lookDamping
+
+        // 5. Smooth Player Movement with Momentum & Limping Dynamics
+        if (playerHiding == HidingType.NONE && !isWakingUp) {
+            var speed = if (isCrouching) 1.9f else 3.6f
+            if (gameSettings.limping) {
+                speed *= 0.68f // Limping reduces walk speed
+            }
             val rad = Math.toRadians(playerYaw.toDouble())
             val forwardX = -sin(rad).toFloat()
             val forwardZ = cos(rad).toFloat()
             val rightX = cos(rad).toFloat()
             val rightZ = sin(rad).toFloat()
 
-            val dx = (forwardX * moveJoystickY + rightX * moveJoystickX) * speed * dt
-            val dz = (forwardZ * moveJoystickY + rightZ * moveJoystickX) * speed * dt
+            val isMoving = abs(moveJoystickX) > 0.05f || abs(moveJoystickY) > 0.05f
+            val targetVelX = if (isMoving) (forwardX * moveJoystickY + rightX * moveJoystickX) * speed else 0f
+            val targetVelZ = if (isMoving) (forwardZ * moveJoystickY + rightZ * moveJoystickX) * speed else 0f
 
-            val isMoving = abs(moveJoystickX) > 0.1f || abs(moveJoystickY) > 0.1f
-            if (isMoving) {
+            val moveDamping = 1.0f - exp((if (isMoving) -14f else -18f) * dt)
+            currentVelX += (targetVelX - currentVelX) * moveDamping
+            currentVelZ += (targetVelZ - currentVelZ) * moveDamping
+
+            val dx = currentVelX * dt
+            val dz = currentVelZ * dt
+
+            if (abs(currentVelX) > 0.04f || abs(currentVelZ) > 0.04f) {
+                walkCycleTimer += dt * (if (gameSettings.limping) 4.8f else 7.0f)
                 val newX = playerPos.x + dx
                 val newZ = playerPos.z + dz
 
@@ -216,7 +366,7 @@ class GrannyRenderer(
             }
         }
 
-        // 4. Update Enemy AIs
+        // 6. Update Enemy AIs
         grannyAI.update(dt, playerPos, playerHiding, world, audio) { damage, msg ->
             handlePlayerDamage(msg)
         }
@@ -230,7 +380,7 @@ class GrannyRenderer(
             handlePlayerDamage(msg)
         }
 
-        // 5. Vehicle Escape cutscene if started
+        // 7. Vehicle Escape cutscene if started
         val car = world.vehicle
         if (car.carStarted) {
             car.escapeCutsceneTime += dt
@@ -249,14 +399,8 @@ class GrannyRenderer(
             onStateChange(GameState.GAME_OVER)
             onNotification("Game Over - Granny caught you!")
         } else {
-            // Wake up on next day
-            playerPos.set(0f, 0f, 6.0f)
-            playerHiding = HidingType.NONE
-            currentHidingSpot = null
-            grannyAI.position.set(-6.5f, 0f, -5.0f)
-            grannyAI.state = EnemyState.PATROL
-            grandpaAI.position.set(6.5f, 0f, -2.0f)
-            grandpaAI.state = EnemyState.PATROL
+            // Fade out and wake up in bedroom on next day
+            startDay(playerDays)
             onNotification("$msg - Day $playerDays of $maxDays")
         }
     }
@@ -341,13 +485,18 @@ class GrannyRenderer(
     private fun renderScene() {
         shader.use()
 
-        // Calculate eye position & look vector
-        val eyeHeight = when (playerHiding) {
-            HidingType.UNDER_BED -> 0.35f
-            HidingType.WARDROBE -> 1.15f
-            else -> if (isCrouching) 0.85f else 1.70f
+        // Calculate eye position & look vector with wake-up & limping bob
+        val baseEyeHeight = when {
+            isWakingUp -> currentEyeHeight
+            playerHiding == HidingType.UNDER_BED -> 0.35f
+            playerHiding == HidingType.WARDROBE -> 1.15f
+            isCrouching -> 0.85f
+            else -> 1.70f
         }
-        val eyePos = Vector3(playerPos.x, playerPos.y + eyeHeight, playerPos.z)
+        val limpBob = if (gameSettings.limping && !isWakingUp && (abs(currentVelX) > 0.05f || abs(currentVelZ) > 0.05f)) {
+            sin(walkCycleTimer) * 0.05f
+        } else 0f
+        val eyePos = Vector3(playerPos.x, playerPos.y + baseEyeHeight + limpBob, playerPos.z)
 
         val yawRad = Math.toRadians(playerYaw.toDouble())
         val pitchRad = Math.toRadians(playerPitch.toDouble())
@@ -358,36 +507,61 @@ class GrannyRenderer(
         ).normalized()
 
         val target = eyePos + lookDir
+
+        // Camera Roll (wake up tilt or limping tilt)
+        val roll = if (isWakingUp) wakeUpRoll else {
+            if (gameSettings.limping && (abs(currentVelX) > 0.05f || abs(currentVelZ) > 0.05f)) {
+                sin(walkCycleTimer * 0.5f) * 2.2f
+            } else 0f
+        }
+        val rollRad = Math.toRadians(roll.toDouble())
+        val upX = sin(rollRad).toFloat()
+        val upY = cos(rollRad).toFloat()
+
         viewMatrix.setLookAt(
             eyePos.x, eyePos.y, eyePos.z,
             target.x, target.y, target.z,
-            0f, 1f, 0f
+            upX, upY, 0f
         )
 
         // Set Lighting & Atmosphere Uniforms
         GLES20.glUniform3f(shader.uCameraPosLoc, eyePos.x, eyePos.y, eyePos.z)
         GLES20.glUniform3f(shader.uFlashlightDirLoc, lookDir.x, lookDir.y, lookDir.z)
-        GLES20.glUniform1f(shader.uFlashlightActiveLoc, if (isFlashlightOn) 1.0f else 0.0f)
+        GLES20.glUniform1f(shader.uFlashlightActiveLoc, flashlightIntensity)
 
-        // Ambient & Moonlight
-        GLES20.glUniform3f(shader.uAmbientLightLoc, 0.16f, 0.17f, 0.22f)
-        GLES20.glUniform3f(shader.uMoonLightDirLoc, -0.4f, -0.8f, -0.4f)
-        GLES20.glUniform3f(shader.uMoonLightColorLoc, 0.22f, 0.25f, 0.32f)
-
-        // Horror Glow: Eerie red light around Granny / Sledrina if close
-        val grannyDist = eyePos.distanceTo(grannyAI.position)
-        if (grannyDist < 9.0f) {
-            GLES20.glUniform3f(shader.uHorrorGlowPosLoc, grannyAI.position.x, grannyAI.position.y + 1.5f, grannyAI.position.z)
-            GLES20.glUniform3f(shader.uHorrorGlowColorLoc, 0.85f, 0.12f, 0.12f)
-            GLES20.glUniform1f(shader.uHorrorGlowIntensityLoc, (1.0f - grannyDist / 9.0f) * 1.5f)
+        // Ambient & Moonlight adjusted for Darker mode
+        if (gameSettings.darker) {
+            GLES20.glUniform3f(shader.uAmbientLightLoc, 0.05f, 0.05f, 0.07f)
+            GLES20.glUniform3f(shader.uMoonLightDirLoc, -0.4f, -0.8f, -0.4f)
+            GLES20.glUniform3f(shader.uMoonLightColorLoc, 0.12f, 0.14f, 0.20f)
+            GLES20.glUniform1f(shader.uFogStartLoc, 6.0f)
+            GLES20.glUniform1f(shader.uFogEndLoc, 18.0f)
         } else {
-            GLES20.glUniform1f(shader.uHorrorGlowIntensityLoc, 0.0f)
+            GLES20.glUniform3f(shader.uAmbientLightLoc, 0.16f, 0.17f, 0.22f)
+            GLES20.glUniform3f(shader.uMoonLightDirLoc, -0.4f, -0.8f, -0.4f)
+            GLES20.glUniform3f(shader.uMoonLightColorLoc, 0.22f, 0.25f, 0.32f)
+            GLES20.glUniform1f(shader.uFogStartLoc, 12.0f)
+            GLES20.glUniform1f(shader.uFogEndLoc, 42.0f)
         }
 
-        // Distance Fog
+        // Horror Glow: Grandpa shotgun muzzle flash or Granny proximity glow
+        if (grandpaAI.muzzleFlashActive) {
+            GLES20.glUniform3f(shader.uHorrorGlowPosLoc, grandpaAI.position.x, grandpaAI.position.y + 1.3f, grandpaAI.position.z)
+            GLES20.glUniform3f(shader.uHorrorGlowColorLoc, 1.0f, 0.80f, 0.25f)
+            GLES20.glUniform1f(shader.uHorrorGlowIntensityLoc, 3.5f)
+        } else {
+            val grannyDist = eyePos.distanceTo(grannyAI.position)
+            if (grannyAI.isActive && grannyDist < 9.0f) {
+                GLES20.glUniform3f(shader.uHorrorGlowPosLoc, grannyAI.position.x, grannyAI.position.y + 1.5f, grannyAI.position.z)
+                GLES20.glUniform3f(shader.uHorrorGlowColorLoc, 0.85f, 0.12f, 0.12f)
+                GLES20.glUniform1f(shader.uHorrorGlowIntensityLoc, (1.0f - grannyDist / 9.0f) * 1.5f)
+            } else {
+                GLES20.glUniform1f(shader.uHorrorGlowIntensityLoc, 0.0f)
+            }
+        }
+
+        // Distance Fog Color
         GLES20.glUniform3f(shader.uFogColorLoc, 0.025f, 0.025f, 0.035f)
-        GLES20.glUniform1f(shader.uFogStartLoc, 12.0f)
-        GLES20.glUniform1f(shader.uFogEndLoc, 42.0f)
         GLES20.glUniform1f(shader.uUseObjectColorLoc, 0.0f)
 
         // 1. Render Farmhouse Architecture
@@ -559,15 +733,16 @@ class GrannyRenderer(
     }
 
     private fun renderCharacters() {
-        // 1. Granny (Image 1)
-        val gWalkSway = sin(grannyAI.stateTimer * 8.0).toFloat() * 4.0f
-        drawMeshAt(grannyMesh, grannyAI.position.x, grannyAI.position.y, grannyAI.position.z, rotY = grannyAI.rotationY + gWalkSway)
+        // 1. Granny with smooth animated stick attack (Image 1)
+        drawGrannyWithAnimatedClub()
 
-        // 2. Grandpa (Image 2)
-        drawMeshAt(grandpaMesh, grandpaAI.position.x, grandpaAI.position.y, grandpaAI.position.z, rotY = grandpaAI.rotationY)
+        // 2. Grandpa with smooth aiming, shotgun recoil, and muzzle flash (Image 2)
+        drawGrandpaWithShotgun()
 
         // 3. Slederman (Image 4)
-        drawMeshAt(sledermanMesh, sledermanAI.position.x, sledermanAI.position.y, sledermanAI.position.z, rotY = sledermanAI.rotationY)
+        if (sledermanAI.isActive) {
+            drawMeshAt(sledermanMesh, sledermanAI.position.x, sledermanAI.position.y, sledermanAI.position.z, rotY = sledermanAI.rotationY)
+        }
 
         // 4. Angelene (Image 5) - rendered if freed
         if (angeleneAI.isActiveInWorld) {
@@ -586,6 +761,92 @@ class GrannyRenderer(
                 sc.scarePosition.z,
                 rotY = sc.scareRotationY
             )
+        }
+    }
+
+    private fun drawGrannyWithAnimatedClub() {
+        if (!grannyAI.isActive) return
+        val px = grannyAI.position.x
+        val py = grannyAI.position.y
+        val pz = grannyAI.position.z
+        val rotY = grannyAI.rotationY
+
+        // 1. Draw Granny Body (wrinkled white gown, eerie face, left arm)
+        drawMeshAt(grannyBodyMesh, px, py, pz, rotY = rotY)
+
+        // 2. Smooth Stick Attack Animation
+        // Wind-up: lifts club high back over shoulder (0 to -85 deg)
+        // Strike: rapid downward strike (-85 to +65 deg)
+        // Recovery: smooth return (+65 to 0 deg)
+        val shoulderPitchX = if (grannyAI.isAttacking) {
+            val t = grannyAI.attackAnimTimer
+            when {
+                t < 0.45f -> {
+                    val p = t / 0.45f
+                    -85f * (p * p)
+                }
+                t < 0.65f -> {
+                    val p = (t - 0.45f) / 0.20f
+                    -85f + 150f * p
+                }
+                else -> {
+                    val p = ((t - 0.65f) / 0.60f).coerceIn(0f, 1f)
+                    65f * (1f - p)
+                }
+            }
+        } else {
+            val isMoving = grannyAI.state == EnemyState.CHASE || grannyAI.state == EnemyState.PATROL
+            if (isMoving) sin(grannyAI.stateTimer * 6.0f) * 10.0f else sin(menuAnimTime * 2.0f) * 4.0f
+        }
+
+        // 3. Draw Granny Club Arm with shoulder pivot transformation
+        modelMatrix.setIdentity()
+        modelMatrix.translate(px, py, pz)
+        modelMatrix.rotate(rotY, 0f, 1f, 0f)
+        modelMatrix.translate(0.38f, 1.35f, 0.05f) // Right shoulder socket
+        modelMatrix.rotate(shoulderPitchX, 1f, 0f, 0f)
+        updateMatrices()
+        grannyClubArmMesh.render(shader)
+    }
+
+    private fun drawGrandpaWithShotgun() {
+        if (!grandpaAI.isActive) return
+        val px = grandpaAI.position.x
+        val py = grandpaAI.position.y
+        val pz = grandpaAI.position.z
+        val rotY = grandpaAI.rotationY
+
+        // 1. Draw Grandpa Body
+        drawMeshAt(grandpaBodyMesh, px, py, pz, rotY = rotY)
+
+        // 2. Compute smooth shotgun aim and recoil kick
+        var pitchX = 22f // Patrol rest angle
+        var recoilZ = 0f
+        if (grandpaAI.isShooting) {
+            recoilZ = -0.14f * grandpaAI.recoilProgress
+            pitchX = -22f * grandpaAI.recoilProgress
+        } else if (grandpaAI.isAiming) {
+            pitchX = 22f * (1.0f - grandpaAI.aimProgress)
+        }
+
+        // 3. Draw Shotgun and Arms attached to chest/shoulder
+        modelMatrix.setIdentity()
+        modelMatrix.translate(px, py, pz)
+        modelMatrix.rotate(rotY, 0f, 1f, 0f)
+        modelMatrix.translate(0f, 1.25f, 0.05f + recoilZ)
+        modelMatrix.rotate(pitchX, 1f, 0f, 0f)
+        updateMatrices()
+        grandpaShotgunMesh.render(shader)
+
+        // 4. Fiery Muzzle Flash during blast
+        if (grandpaAI.muzzleFlashActive) {
+            modelMatrix.setIdentity()
+            modelMatrix.translate(px, py, pz)
+            modelMatrix.rotate(rotY, 0f, 1f, 0f)
+            modelMatrix.translate(0f, 1.26f, 1.35f + recoilZ)
+            modelMatrix.rotate(pitchX, 1f, 0f, 0f)
+            updateMatrices()
+            muzzleFlashMesh.render(shader)
         }
     }
 

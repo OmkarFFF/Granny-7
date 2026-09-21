@@ -235,7 +235,12 @@ object MeshFactory {
         createTreeMesh()
         createChainedChestMesh()
         createGrannyMesh()
+        createGrannyBodyMesh()
+        createGrannyClubArmMesh()
         createGrandpaMesh()
+        createGrandpaBodyMesh()
+        createGrandpaShotgunMesh()
+        createMuzzleFlashMesh()
         createSledermanMesh()
         createSledrinaMesh()
         createAngeleneMesh()
@@ -286,6 +291,45 @@ object MeshFactory {
         b.build()
     }
 
+    // Granny Body Mesh (without right arm) for smooth animated attacks
+    fun createGrannyBodyMesh(): Mesh = getOrCreate("granny_body") {
+        val b = MeshBuilder()
+        // Head
+        b.addBox(0f, 1.75f, 0f, 0.32f, 0.35f, 0.32f, 0.72f, 0.68f, 0.65f)
+        // Gray wild hair
+        b.addBox(0f, 1.95f, -0.05f, 0.35f, 0.15f, 0.36f, 0.45f, 0.45f, 0.45f)
+        // Eyes (hollow dark with white pinpoints)
+        b.addBox(-0.08f, 1.82f, 0.165f, 0.06f, 0.05f, 0.02f, 0.95f, 0.95f, 0.95f)
+        b.addBox(0.08f, 1.82f, 0.165f, 0.06f, 0.05f, 0.02f, 0.95f, 0.95f, 0.95f)
+        // Gaping creepy mouth
+        b.addBox(0f, 1.68f, 0.165f, 0.14f, 0.08f, 0.02f, 0.15f, 0.05f, 0.05f)
+
+        // Iconic long white gown
+        b.addBox(0f, 1.45f, 0f, 0.55f, 0.35f, 0.42f, 0.88f, 0.88f, 0.90f)
+        b.addBox(0f, 1.05f, 0f, 0.65f, 0.55f, 0.50f, 0.82f, 0.82f, 0.84f)
+        b.addBox(0f, 0.45f, 0f, 0.76f, 0.75f, 0.60f, 0.76f, 0.76f, 0.78f)
+
+        // Left arm (relaxed/menacing)
+        b.addBox(-0.38f, 1.15f, 0.05f, 0.12f, 0.65f, 0.14f, 0.82f, 0.82f, 0.84f)
+        b.addBox(-0.38f, 0.75f, 0.08f, 0.10f, 0.20f, 0.10f, 0.65f, 0.60f, 0.58f)
+        b.build()
+    }
+
+    // Granny Club Arm Mesh (pivot at shoulder origin 0,0,0)
+    fun createGrannyClubArmMesh(): Mesh = getOrCreate("granny_club_arm") {
+        val b = MeshBuilder()
+        // Right upper arm extending forward and down from shoulder
+        b.addBox(0f, -0.15f, 0.12f, 0.12f, 0.38f, 0.26f, 0.82f, 0.82f, 0.84f)
+        // Hand
+        b.addBox(0f, -0.22f, 0.28f, 0.11f, 0.12f, 0.12f, 0.65f, 0.60f, 0.58f)
+
+        // The Danda / Club extending along Z
+        b.addCylinder(0f, -0.20f, 0.45f, 0.045f, 0.80f, 8, 0.45f, 0.25f, 0.12f)
+        // Blood-soaked striking tip
+        b.addCylinder(0f, -0.20f, 0.78f, 0.065f, 0.28f, 8, 0.80f, 0.05f, 0.05f)
+        b.build()
+    }
+
     // Grandpa 3D character mesh based on uploaded Image 2
     // Features: dark gray clothes, bald head, white eyes, holding double barrel shotgun
     fun createGrandpaMesh(): Mesh = getOrCreate("grandpa") {
@@ -311,6 +355,48 @@ object MeshFactory {
         b.addCylinder(-0.01f, 1.25f, 0.70f, 0.025f, 0.65f, 6, 0.15f, 0.15f, 0.18f) // left barrel
         b.addCylinder(0.04f, 1.25f, 0.70f, 0.025f, 0.65f, 6, 0.15f, 0.15f, 0.18f) // right barrel
 
+        b.build()
+    }
+
+    // Grandpa Body Mesh (without arms/shotgun)
+    fun createGrandpaBodyMesh(): Mesh = getOrCreate("grandpa_body") {
+        val b = MeshBuilder()
+        // Bald head
+        b.addBox(0f, 1.76f, 0f, 0.30f, 0.34f, 0.30f, 0.65f, 0.60f, 0.56f)
+        b.addBox(-0.07f, 1.82f, 0.155f, 0.05f, 0.04f, 0.02f, 0.90f, 0.90f, 0.90f)
+        b.addBox(0.07f, 1.82f, 0.155f, 0.05f, 0.04f, 0.02f, 0.90f, 0.90f, 0.90f)
+
+        // Dark stained work shirt
+        b.addBox(0f, 1.30f, 0f, 0.58f, 0.62f, 0.38f, 0.22f, 0.24f, 0.26f)
+
+        // Dark pants
+        b.addBox(-0.16f, 0.50f, 0f, 0.22f, 0.98f, 0.24f, 0.16f, 0.18f, 0.20f)
+        b.addBox(0.16f, 0.50f, 0f, 0.22f, 0.98f, 0.24f, 0.16f, 0.18f, 0.20f)
+        b.build()
+    }
+
+    // Grandpa Shotgun + Arms Mesh (pivot at chest/shoulder origin 0,0,0)
+    fun createGrandpaShotgunMesh(): Mesh = getOrCreate("grandpa_shotgun") {
+        val b = MeshBuilder()
+        // Arms holding shotgun forward from origin
+        b.addBox(-0.25f, 0f, 0.18f, 0.12f, 0.14f, 0.36f, 0.22f, 0.24f, 0.26f)
+        b.addBox(0.25f, 0f, 0.18f, 0.12f, 0.14f, 0.36f, 0.22f, 0.24f, 0.26f)
+
+        // Shotgun stock & action
+        b.addBox(0.02f, -0.02f, 0.26f, 0.08f, 0.12f, 0.34f, 0.40f, 0.20f, 0.10f)
+        // Dual barrels extending forward along Z
+        b.addCylinder(-0.02f, 0.01f, 0.62f, 0.025f, 0.65f, 6, 0.15f, 0.15f, 0.18f)
+        b.addCylinder(0.03f, 0.01f, 0.62f, 0.025f, 0.65f, 6, 0.15f, 0.15f, 0.18f)
+        b.build()
+    }
+
+    // Muzzle Flash Mesh for Shotgun firing effect
+    fun createMuzzleFlashMesh(): Mesh = getOrCreate("muzzle_flash") {
+        val b = MeshBuilder()
+        // Bright fiery cross / star at barrel end
+        val r = 1.0f; val g = 0.85f; val bl = 0.20f
+        b.addBox(0f, 0f, 0f, 0.22f, 0.22f, 0.04f, r, g, bl, 0.95f)
+        b.addBox(0f, 0f, 0.06f, 0.12f, 0.12f, 0.18f, 1.0f, 0.95f, 0.70f, 1.0f)
         b.build()
     }
 

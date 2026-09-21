@@ -34,6 +34,10 @@ class HorrorAudioEngine(private val context: Context) {
         context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
     }
 
+    var isMusicEnabled: Boolean
+        get() = !isMuted
+        set(value) = setAmbienceEnabled(value)
+
     fun setSoundEnabled(enabled: Boolean) {
         sfxEnabled = enabled
     }

@@ -5,6 +5,8 @@ import com.example.engine.Vector3
 
 enum class GameState {
     MAIN_MENU,
+    OPTIONS,
+    TIPS_STORY,
     LOADING,
     GAMEPLAY,
     PAUSED,
@@ -12,6 +14,55 @@ enum class GameState {
     GAME_OVER,
     WIN
 }
+
+enum class DifficultyLevel(val displayName: String, val description: String) {
+    PRACTICE(
+        "Practice",
+        "Granny & Grandpa are not home. You can explore the farmhouse safely, search for items, and practice escaping without threats."
+    ),
+    EASY(
+        "Easy",
+        "Granny and Grandpa move slower than you. Dropped objects make less noise. The creaking floors don't alert them as easily."
+    ),
+    NORMAL(
+        "Normal",
+        "Granny and Grandpa move at normal speed. Granny hears everything you drop. Farmhouse doors and floorboards creak."
+    ),
+    HARD(
+        "Hard",
+        "Granny and Grandpa move faster and are relentless. Granny is more vigilant. Hearing range is significantly increased."
+    ),
+    EXTREME(
+        "Extreme",
+        "Granny and Grandpa move faster than the player. Pitch dark environment. One hit causes fatal damage. Only for true horror masters."
+    )
+}
+
+enum class GameTheme(val displayName: String) {
+    ORIGINAL("Original"),
+    DARK("Dark"),
+    NIGHTMARE("Nightmare")
+}
+
+enum class GraphicsQuality(val displayName: String) {
+    LOW("Low"),
+    MEDIUM("Medium"),
+    HIGH("High")
+}
+
+data class GameSettings(
+    var difficulty: DifficultyLevel = DifficultyLevel.NORMAL,
+    var theme: GameTheme = GameTheme.ORIGINAL,
+    var darker: Boolean = false,
+    var extraLocks: Boolean = false,
+    var limping: Boolean = false,
+    var music: Boolean = true,
+    var soundEffects: Boolean = true,
+    var grannyEnabled: Boolean = true,
+    var grandpaEnabled: Boolean = true,
+    var slendrinaEnabled: Boolean = true,
+    var quality: GraphicsQuality = GraphicsQuality.HIGH
+)
 
 enum class ItemType(val displayName: String, val description: String, val meshIndex: Int) {
     CAR_KEY("Car Key", "Ignition key for the old vehicle outside.", 0),

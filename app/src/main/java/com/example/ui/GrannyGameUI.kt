@@ -47,7 +47,10 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.audio.HorrorAudioEngine
 import com.example.engine.GrannyRenderer
+import com.example.game.DifficultyLevel
+import com.example.game.GameSettings
 import com.example.game.GameState
+import com.example.game.GraphicsQuality
 import com.example.game.HidingType
 import com.example.game.ItemType
 import kotlinx.coroutines.delay
@@ -466,46 +469,36 @@ fun GrannyGameHUD(
  * Faithful to the visual reference poster with live 3D background, moonlight,
  * drifting volumetric fog, flickering lanterns, distressed typography, and interactive horror buttons.
  */
+/**
+ * Cinematic full-screen native Android Main Menu for Granny 7: The Famhouse.
+ * Faithful to user specifications: EXACTLY three buttons (PLAY, MORE GAMES, QUIT).
+ */
 @Composable
 fun MainMenuOverlay(
-    onStartGame: () -> Unit,
+    onPlay: () -> Unit,
     onQuitGame: () -> Unit = {},
     audioEngine: HorrorAudioEngine? = null,
     modifier: Modifier = Modifier
 ) {
-    var showObjectives by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
     var showQuitDialog by remember { mutableStateOf(false) }
-    var isLoadingTransition by remember { mutableStateOf(false) }
-    var useKeyartBackdrop by remember { mutableStateOf(true) }
-
-    // Settings state
-    var sfxEnabled by remember { mutableStateOf(true) }
-    var ambienceEnabled by remember { mutableStateOf(true) }
-    var hapticsEnabled by remember { mutableStateOf(true) }
-    var sensitivity by remember { mutableFloatStateOf(1.0f) }
-    var difficulty by remember { mutableStateOf("NORMAL") }
-
-    val coroutineScope = rememberCoroutineScope()
+    var showMoreGamesDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (useKeyartBackdrop) Color.Black else Color.Transparent)
+            .background(Color.Black)
     ) {
-        // 1. Background Visual Presentation: High-Res Cinematic Matte Art + Live 3D Scene blend
-        if (useKeyartBackdrop) {
-            Image(
-                painter = painterResource(id = R.drawable.granny7_menu_poster),
-                contentDescription = "Granny 7 The Famhouse Cinematic Poster",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(alpha = 0.94f)
-            )
-        }
+        // 1. High-Res Cinematic Matte Art
+        Image(
+            painter = painterResource(id = R.drawable.granny7_menu_poster),
+            contentDescription = "Granny 7 The Famhouse Cinematic Poster",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(alpha = 0.94f)
+        )
 
-        // 2. Cinematic Atmospheric Vignette (Dark edges, clear center)
+        // 2. Cinematic Atmospheric Vignette
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -546,70 +539,49 @@ fun MainMenuOverlay(
                     .padding(top = 8.dp)
             )
 
-            // Lower-Left: Primary Horror Action Buttons
+            // Lower-Left: EXACTLY THREE MAIN BUTTONS: PLAY, MORE GAMES, QUIT
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 horizontalAlignment = Alignment.Start
             ) {
-                // Primary PLAY Button with blood-red slash underline
+                // 1. PLAY Button -> Opens Options Screen
                 HorrorMenuButton(
                     text = "PLAY",
                     isPrimary = true,
                     onClick = {
-                        audioEngine?.playMenuStartGame()
-                        isLoadingTransition = true
-                        coroutineScope.launch {
-                            delay(1200)
-                            onStartGame()
-                        }
+                        audioEngine?.playMenuClick()
+                        onPlay()
                     },
                     testTag = "play_button"
                 )
 
-                // Secondary Row of Menu Actions
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // SETTINGS Button
-                    HorrorSecondaryButton(
-                        text = "SETTINGS",
-                        icon = Icons.Outlined.Settings,
-                        onClick = {
-                            audioEngine?.playMenuClick()
-                            showSettings = true
-                        },
-                        testTag = "settings_button"
-                    )
+                // 2. MORE GAMES Button -> Shows dialog without crashing
+                HorrorMenuButton(
+                    text = "MORE GAMES",
+                    isPrimary = false,
+                    onClick = {
+                        audioEngine?.playMenuClick()
+                        showMoreGamesDialog = true
+                    },
+                    testTag = "more_games_button"
+                )
 
-                    // ESCAPE OBJECTIVES Button
-                    HorrorSecondaryButton(
-                        text = "OBJECTIVES",
-                        icon = Icons.Outlined.List,
-                        onClick = {
-                            audioEngine?.playMenuClick()
-                            showObjectives = true
-                        },
-                        testTag = "objectives_button"
-                    )
-
-                    // QUIT Button
-                    HorrorSecondaryButton(
-                        text = "QUIT",
-                        icon = Icons.Outlined.ExitToApp,
-                        onClick = {
-                            audioEngine?.playMenuClick()
-                            showQuitDialog = true
-                        },
-                        testTag = "quit_button"
-                    )
-                }
+                // 3. QUIT Button -> Opens confirmation dialog
+                HorrorMenuButton(
+                    text = "QUIT",
+                    isPrimary = false,
+                    onClick = {
+                        audioEngine?.playMenuClick()
+                        showQuitDialog = true
+                    },
+                    testTag = "quit_button"
+                )
             }
 
-            // Lower-Center: Distressed "GRANNY 7" Watermark (Faithful to Reference Poster)
+            // Lower-Center: Distressed "GRANNY 7" Watermark
             if (isWideScreen) {
                 WatermarkTitleEmblem(
                     modifier = Modifier
@@ -619,40 +591,9 @@ fun MainMenuOverlay(
             }
         }
 
-        // 7. Modals & Dialogs
-        // Escape Objectives Dialog
-        if (showObjectives) {
-            EscapeObjectivesDialog(
-                onDismiss = { showObjectives = false }
-            )
-        }
-
-        // Settings Dialog
-        if (showSettings) {
-            HorrorSettingsDialog(
-                sfxEnabled = sfxEnabled,
-                onSfxChange = {
-                    sfxEnabled = it
-                    audioEngine?.setSoundEnabled(it)
-                },
-                ambienceEnabled = ambienceEnabled,
-                onAmbienceChange = {
-                    ambienceEnabled = it
-                    audioEngine?.setAmbienceEnabled(it)
-                },
-                hapticsEnabled = hapticsEnabled,
-                onHapticsChange = {
-                    hapticsEnabled = it
-                    audioEngine?.setHapticsEnabled(it)
-                },
-                sensitivity = sensitivity,
-                onSensitivityChange = { sensitivity = it },
-                difficulty = difficulty,
-                onDifficultyChange = { difficulty = it },
-                useKeyartBackdrop = useKeyartBackdrop,
-                onToggleBackdrop = { useKeyartBackdrop = it },
-                onDismiss = { showSettings = false }
-            )
+        // More Games Dialog
+        if (showMoreGamesDialog) {
+            MoreGamesDialog(onDismiss = { showMoreGamesDialog = false })
         }
 
         // Quit Confirmation Dialog
@@ -665,45 +606,794 @@ fun MainMenuOverlay(
                 onDismiss = { showQuitDialog = false }
             )
         }
+    }
+}
 
-        // 8. Cinematic Loading Transition Overlay
-        AnimatedVisibility(
-            visible = isLoadingTransition,
-            enter = fadeIn(animationSpec = tween(600)),
-            exit = fadeOut(animationSpec = tween(400))
+/**
+ * Functional dialog for MORE GAMES button.
+ */
+@Composable
+fun MoreGamesDialog(onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xDD000000)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF141419)),
+            border = CardDefaults.outlinedCardBorder().copy(
+                brush = Brush.linearGradient(listOf(Color(0xFF8B0000), Color(0xFF424242)))
+            ),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .widthIn(max = 420.dp)
+                .padding(24.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xF5040306)),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                Icon(
+                    imageVector = Icons.Filled.SportsEsports,
+                    contentDescription = null,
+                    tint = Color(0xFFFF5252),
+                    modifier = Modifier.size(48.dp)
+                )
+                Text(
+                    text = "MORE GAMES",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.Serif,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = "No additional horror games installed on this device.\n\nUpcoming chapters:\n• Granny Chapter 8: The Asylum\n• Sledrina: The Curse\n• Grandpa's Hunting Lodge\n\nStay tuned for future releases!",
+                    color = Color(0xFFCFD8DC),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    textAlign = TextAlign.Center
+                )
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B0000)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("close_more_games_button")
                 ) {
+                    Text("CLOSE", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Full Options Screen prior to starting gameplay.
+ * Features Difficulty, Audio, Bots, Modifiers (Darker, Limping, Extra Locks), Quality, and Back/Continue.
+ */
+@Composable
+fun OptionsOverlay(
+    initialSettings: GameSettings,
+    onSaveAndContinue: (GameSettings) -> Unit,
+    onBack: () -> Unit,
+    audioEngine: HorrorAudioEngine? = null,
+    modifier: Modifier = Modifier
+) {
+    var difficulty by remember { mutableStateOf(initialSettings.difficulty) }
+    var music by remember { mutableStateOf(initialSettings.music) }
+    var soundEffects by remember { mutableStateOf(initialSettings.soundEffects) }
+    var grannyEnabled by remember { mutableStateOf(initialSettings.grannyEnabled) }
+    var grandpaEnabled by remember { mutableStateOf(initialSettings.grandpaEnabled) }
+    var slendrinaEnabled by remember { mutableStateOf(initialSettings.slendrinaEnabled) }
+    var extraLocks by remember { mutableStateOf(initialSettings.extraLocks) }
+    var darker by remember { mutableStateOf(initialSettings.darker) }
+    var limping by remember { mutableStateOf(initialSettings.limping) }
+    var quality by remember { mutableStateOf(initialSettings.quality) }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xF208080D))
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.granny7_menu_poster),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(alpha = 0.18f)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "DAY 1",
-                        color = Color(0xFFFF1744),
-                        fontSize = 36.sp,
+                        text = "OPTIONS",
+                        color = Color.White,
+                        fontSize = 30.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Serif,
-                        letterSpacing = 6.sp
-                    )
-                    Text(
-                        text = "ENTERING THE FAMHOUSE...",
-                        color = Color(0xFFCFD8DC),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
                         letterSpacing = 4.sp
                     )
-                    CircularProgressIndicator(
-                        color = Color(0xFFD50000),
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(36.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .height(3.dp)
+                            .width(60.dp)
+                            .background(Color(0xFFFF1744))
                     )
                 }
             }
+
+            // Scrollable Settings Cards
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // 1. DIFFICULTY
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x668B0000)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "DIFFICULTY",
+                            color = Color(0xFFFF8A80),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(DifficultyLevel.values().size) { idx ->
+                                val diff = DifficultyLevel.values()[idx]
+                                val isSelected = difficulty == diff
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) Color(0xFF8B0000) else Color(0xFF23232C),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (isSelected) 1.5.dp else 1.dp,
+                                        if (isSelected) Color(0xFFFF5252) else Color(0x33FFFFFF)
+                                    ),
+                                    modifier = Modifier
+                                        .clickable {
+                                            difficulty = diff
+                                            audioEngine?.playMenuClick()
+                                        }
+                                        .testTag("difficulty_${diff.name.lowercase()}")
+                                ) {
+                                    Text(
+                                        text = diff.displayName.uppercase(),
+                                        color = if (isSelected) Color.White else Color(0xFFB0BEC5),
+                                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = difficulty.description,
+                            color = Color(0xFFCFD8DC),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                // 2. AUDIO TOGGLES
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33444444)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "AUDIO",
+                            color = Color(0xFFFF8A80),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+
+                        // Music Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("MUSIC", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Atmospheric horror soundscape", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = music,
+                                onCheckedChange = {
+                                    music = it
+                                    audioEngine?.isMusicEnabled = it
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_music")
+                            )
+                        }
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        // Sound Effects Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("SOUND EFFECTS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Footsteps, creaking doors, shotgun blasts", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = soundEffects,
+                                onCheckedChange = {
+                                    soundEffects = it
+                                    audioEngine?.setSoundEnabled(it)
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_sound_effects")
+                            )
+                        }
+                    }
+                }
+
+                // 3. BOT TOGGLES
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33444444)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "BOTS (CHARACTERS)",
+                            color = Color(0xFFFF8A80),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+
+                        // Granny
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("GRANNY", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Armed with a bloodstained club", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = grannyEnabled,
+                                onCheckedChange = { grannyEnabled = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_granny")
+                            )
+                        }
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        // Grandpa
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("GRANDPA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Armed with a 12-gauge shotgun", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = grandpaEnabled,
+                                onCheckedChange = { grandpaEnabled = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_grandpa")
+                            )
+                        }
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        // Slendrina
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("SLENDERINA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Materializes without warning in dark corridors", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = slendrinaEnabled,
+                                onCheckedChange = { slendrinaEnabled = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_slendrina")
+                            )
+                        }
+                    }
+                }
+
+                // 4. GAMEPLAY MODIFIERS
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33444444)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "GAMEPLAY MODIFIERS",
+                            color = Color(0xFFFF8A80),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+
+                        // Extra Locks
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("EXTRA LOCKS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Adds additional padlocks to escape exits", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = extraLocks,
+                                onCheckedChange = { extraLocks = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_extra_locks")
+                            )
+                        }
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        // Darker Mode
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("DARKER", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Farmhouse interior is steeped in deep darkness", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = darker,
+                                onCheckedChange = { darker = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_darker")
+                            )
+                        }
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        // Limping Mode
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("LIMPING", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Player suffers an injury and walks with a limp", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = limping,
+                                onCheckedChange = { limping = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFFFF1744),
+                                    checkedTrackColor = Color(0xFF5A0000)
+                                ),
+                                modifier = Modifier.testTag("switch_limping")
+                            )
+                        }
+                    }
+                }
+
+                // 5. GRAPHICS QUALITY
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33444444)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "QUALITY",
+                            color = Color(0xFFFF8A80),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            GraphicsQuality.values().forEach { q ->
+                                val isSelected = quality == q
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) Color(0xFF8B0000) else Color(0xFF23232C),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        if (isSelected) 1.5.dp else 1.dp,
+                                        if (isSelected) Color(0xFFFF5252) else Color(0x33FFFFFF)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            quality = q
+                                            audioEngine?.playMenuClick()
+                                        }
+                                        .testTag("quality_${q.name.lowercase()}")
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(vertical = 10.dp)
+                                    ) {
+                                        Text(
+                                            text = q.displayName.uppercase(),
+                                            color = if (isSelected) Color.White else Color(0xFFB0BEC5),
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom Action Buttons: BACK & CONTINUE
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        audioEngine?.playMenuClick()
+                        onBack()
+                    },
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF757575)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .testTag("options_back_button")
+                ) {
+                    Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("BACK", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = {
+                        audioEngine?.playMenuClick()
+                        val updated = GameSettings(
+                            difficulty = difficulty,
+                            music = music,
+                            soundEffects = soundEffects,
+                            grannyEnabled = grannyEnabled,
+                            grandpaEnabled = grandpaEnabled,
+                            slendrinaEnabled = slendrinaEnabled,
+                            extraLocks = extraLocks,
+                            darker = darker,
+                            limping = limping,
+                            quality = quality
+                        )
+                        onSaveAndContinue(updated)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .testTag("options_continue_button")
+                ) {
+                    Text("CONTINUE", fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(imageVector = Icons.Filled.ArrowForward, contentDescription = null)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Tips & Story Screen shown after Options.
+ * Displays atmospheric lore and vital survival tips, with Back and Play Game buttons.
+ */
+@Composable
+fun TipsStoryOverlay(
+    onStartGame: () -> Unit,
+    onBackToOptions: () -> Unit,
+    audioEngine: HorrorAudioEngine? = null,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xF208080D))
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.granny7_menu_poster),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(alpha = 0.22f)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "THE FARMHOUSE",
+                        color = Color.White,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Serif,
+                        letterSpacing = 3.sp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .height(3.dp)
+                            .width(50.dp)
+                            .background(Color(0xFFFF1744))
+                    )
+                }
+            }
+
+            // Scrollable Story and Tips
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Story Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x668B0000)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "STORY",
+                            color = Color(0xFFFF5252),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            letterSpacing = 2.sp
+                        )
+                        Text(
+                            text = "You awaken trapped inside an unfamiliar bedroom of a dark, decrepit farmhouse. The front door is reinforced with heavy iron padlocks and chains. Outside in the yard lies an abandoned vehicle with missing parts.\n\nGranny and Grandpa dwell here, listening for your every breath. You have only 4 days to gather the supplies and escape before you vanish forever.",
+                            color = Color(0xFFECEFF1),
+                            fontSize = 14.sp,
+                            lineHeight = 21.sp
+                        )
+                    }
+                }
+
+                // Tips Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xDD181820)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x33444444)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = "SURVIVAL TIPS",
+                            color = Color(0xFFFF8A80),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            letterSpacing = 2.sp
+                        )
+
+                        TipItem(
+                            icon = Icons.Filled.Hearing,
+                            title = "Granny Hears Everything",
+                            desc = "Dropping items or running creates loud noises. Crouch and tread carefully to avoid alerting her."
+                        )
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        TipItem(
+                            icon = Icons.Filled.Adjust,
+                            title = "Grandpa's 12-Gauge Shotgun",
+                            desc = "Grandpa wanders the halls with his shotgun. If you step into his line of sight, take cover immediately!"
+                        )
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        TipItem(
+                            icon = Icons.Filled.Hotel,
+                            title = "Hiding Under Beds & Wardrobes",
+                            desc = "Interact with wardrobes or beds to conceal yourself. Stay still until the heavy footsteps fade away."
+                        )
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        TipItem(
+                            icon = Icons.Filled.VisibilityOff,
+                            title = "Slendrina's Gaze",
+                            desc = "When Slendrina materializes before you, immediately look away. Staring into her eyes causes mortal terror."
+                        )
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        TipItem(
+                            icon = Icons.Filled.DirectionsCar,
+                            title = "Two Ways to Escape",
+                            desc = "Repair the getaway car with a Battery, Fuel, Engine & Mechanical Parts, or unlock the South Gate with the Gate Key and Bolt Cutters."
+                        )
+
+                        Divider(color = Color(0x22FFFFFF))
+
+                        TipItem(
+                            icon = Icons.Filled.FlashlightOn,
+                            title = "Flashlight Starts OFF",
+                            desc = "Tap the flashlight icon in the HUD to toggle your electric torch when searching dark rooms."
+                        )
+                    }
+                }
+            }
+
+            // Bottom Navigation Buttons: BACK & PLAY
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        audioEngine?.playMenuClick()
+                        onBackToOptions()
+                    },
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF757575)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .testTag("tips_back_button")
+                ) {
+                    Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("BACK", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = {
+                        audioEngine?.playMenuStartGame()
+                        onStartGame()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .testTag("tips_play_button")
+                ) {
+                    Text("PLAY GAME", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TipItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    desc: String
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = Color(0x338B0000),
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFFFF5252),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(desc, color = Color(0xFFB0BEC5), fontSize = 12.sp, lineHeight = 17.sp)
         }
     }
 }
