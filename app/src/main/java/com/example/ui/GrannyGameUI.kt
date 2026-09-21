@@ -491,7 +491,7 @@ fun MainMenuOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(if (useKeyartBackdrop) Color.Black else Color.Transparent)
     ) {
         // 1. Background Visual Presentation: High-Res Cinematic Matte Art + Live 3D Scene blend
         if (useKeyartBackdrop) {

@@ -51,27 +51,28 @@ class GrannyRenderer(
 
     // Shaders & Meshes
     private val shader = HorrorShader()
-    private lateinit var cubeMesh: Mesh
-    private lateinit var doorMesh: Mesh
-    private lateinit var tableMesh: Mesh
-    private lateinit var bedMesh: Mesh
-    private lateinit var wardrobeMesh: Mesh
-    private lateinit var bookshelfMesh: Mesh
-    private lateinit var kitchenMesh: Mesh
-    private lateinit var bathtubMesh: Mesh
-    private lateinit var vehicleMesh: Mesh
-    private lateinit var wellMesh: Mesh
-    private lateinit var fenceMesh: Mesh
-    private lateinit var gateMesh: Mesh
-    private lateinit var treeMesh: Mesh
-    private lateinit var chainedChestMesh: Mesh
+    private val cubeMesh get() = MeshFactory.createCube()
+    private val doorMesh get() = MeshFactory.createDoorMesh()
+    private val tableMesh get() = MeshFactory.createTableMesh()
+    private val bedMesh get() = MeshFactory.createBedMesh()
+    private val wardrobeMesh get() = MeshFactory.createWardrobeMesh()
+    private val bookshelfMesh get() = MeshFactory.createBookshelfMesh()
+    private val kitchenMesh get() = MeshFactory.createKitchenCounterMesh()
+    private val bathtubMesh get() = MeshFactory.createBathtubMesh()
+    private val vehicleMesh get() = MeshFactory.createVehicleMesh()
+    private val wellMesh get() = MeshFactory.createWellMesh()
+    private val fenceMesh get() = MeshFactory.createFenceMesh()
+    private val gateMesh get() = MeshFactory.createGateMesh()
+    private val treeMesh get() = MeshFactory.createTreeMesh()
+    private val chainedChestMesh get() = MeshFactory.createChainedChestMesh()
 
-    private lateinit var grannyMesh: Mesh
-    private lateinit var grandpaMesh: Mesh
-    private lateinit var sledermanMesh: Mesh
-    private lateinit var sledrinaMesh: Mesh
-    private lateinit var angeleneMesh: Mesh
-    private val itemMeshes = HashMap<Int, Mesh>()
+    private val grannyMesh get() = MeshFactory.createGrannyMesh()
+    private val grandpaMesh get() = MeshFactory.createGrandpaMesh()
+    private val sledermanMesh get() = MeshFactory.createSledermanMesh()
+    private val sledrinaMesh get() = MeshFactory.createSledrinaMesh()
+    private val angeleneMesh get() = MeshFactory.createAngeleneMesh()
+
+    private fun getItemMesh(meshIndex: Int): Mesh = MeshFactory.createItemMesh(meshIndex)
 
     // AI Enemies
     val grannyAI = GrannyAI(Vector3(-6.5f, 0f, -5.0f))
@@ -99,32 +100,6 @@ class GrannyRenderer(
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
 
         shader.create()
-
-        // Generate 3D Meshes
-        cubeMesh = MeshFactory.createCube()
-        doorMesh = MeshFactory.createDoorMesh()
-        tableMesh = MeshFactory.createTableMesh()
-        bedMesh = MeshFactory.createBedMesh()
-        wardrobeMesh = MeshFactory.createWardrobeMesh()
-        bookshelfMesh = MeshFactory.createBookshelfMesh()
-        kitchenMesh = MeshFactory.createKitchenCounterMesh()
-        bathtubMesh = MeshFactory.createBathtubMesh()
-        vehicleMesh = MeshFactory.createVehicleMesh()
-        wellMesh = MeshFactory.createWellMesh()
-        fenceMesh = MeshFactory.createFenceMesh()
-        gateMesh = MeshFactory.createGateMesh()
-        treeMesh = MeshFactory.createTreeMesh()
-        chainedChestMesh = MeshFactory.createChainedChestMesh()
-
-        grannyMesh = MeshFactory.createGrannyMesh()
-        grandpaMesh = MeshFactory.createGrandpaMesh()
-        sledermanMesh = MeshFactory.createSledermanMesh()
-        sledrinaMesh = MeshFactory.createSledrinaMesh()
-        angeleneMesh = MeshFactory.createAngeleneMesh()
-
-        for (i in 0..6) {
-            itemMeshes[i] = MeshFactory.createItemMesh(i)
-        }
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -578,7 +553,7 @@ class GrannyRenderer(
 
         for (item in world.items) {
             if (item.isInInventory || item.isUsed) continue
-            val mesh = itemMeshes[item.type.meshIndex] ?: cubeMesh
+            val mesh = getItemMesh(item.type.meshIndex)
             drawMeshAt(mesh, item.position.x, item.position.y + hoverY, item.position.z, rotY = spinY)
         }
     }

@@ -32,8 +32,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        hideSystemUI()
 
-        // Asynchronously preload meshes in background thread so onSurfaceCreated is non-blocking
+        // Asynchronously preload meshes in background thread
         CoroutineScope(Dispatchers.Default).launch {
             MeshFactory.preload()
         }
@@ -180,7 +181,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hideSystemUI() {
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -195,7 +195,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        hideSystemUI()
         glSurfaceView?.onResume()
         if (::audioEngine.isInitialized) {
             audioEngine.startAmbience()
